@@ -306,6 +306,7 @@ function renderLiveDNS(state) {
 
   if (metaEl) metaEl.textContent = totalRecords ? `${totalRecords} records` : '';
   body.innerHTML = `<div class="dns-sections">${sections || '<div class="ds-empty">No records found.</div>'}</div>`;
+  autoCollapse('livedns-panel', totalRecords, 8);
 }
 
 function renderEmailInfra(state) {
@@ -413,6 +414,7 @@ function renderPDNS(state) {
     </tr>
   `).join('');
 
+  autoCollapse('pdns-panel', records.length, 5);
   body.innerHTML = `
     <div class="table-wrap">
       <table class="ds-table">
@@ -493,6 +495,7 @@ function renderCerts(state) {
       <span class="src-badge src-censys">CENSYS</span>
     </div>
   `;
+  autoCollapse('certs-panel', certs.length, 5);
   window._dsCerts = state.certs;
 }
 
@@ -530,6 +533,7 @@ function renderSubdomains(state) {
       <span class="src-badge src-ht">HACKERTARGET</span>
     </div>
   `;
+  autoCollapse('subdomains-panel', subs.length, 10);
 }
 
 function filterSubdomains(q) {
@@ -573,6 +577,7 @@ function renderCohosted(state) {
   `).join('');
 
   body.innerHTML = html || `<div class="ds-empty">No co-hosted domains found.</div>`;
+  autoCollapse('cohosted-panel', list.length, 5);
 }
 
 function renderPorts(state) {
@@ -808,6 +813,19 @@ function renderCDNWAF(state) {
       <span class="src-badge src-ipinfo">HEADERS</span>
     </div>
   `;
+}
+
+/* ── Auto-collapse panels with many results ────────────────────────────── */
+function autoCollapse(panelId, count, threshold) {
+  if (count <= threshold) return;
+  const state = getScanState();
+  if (!state || state._autoCollapsed?.has(panelId)) return;
+  const panel = document.getElementById(panelId);
+  if (!panel || panel.classList.contains('panel-collapsed')) return;
+  panel.classList.add('panel-collapsed');
+  const chevron = document.getElementById(panelId.replace('-panel', '-chevron'));
+  if (chevron) chevron.classList.add('closed');
+  state._autoCollapsed.add(panelId);
 }
 
 /* ── Panel collapse toggle ─────────────────────────────────────────────── */

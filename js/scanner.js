@@ -17,6 +17,7 @@ async function runScan(target, targetType) {
     whois: null, liveDNS: null,
     ti: {}, ports: null, fingerprints: null, urlscan: null,
     scannedAt: new Date().toISOString(),
+    _autoCollapsed: new Set(),
   };
 
   const isDomain = targetType === 'domain';
