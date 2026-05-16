@@ -145,7 +145,11 @@ function renderCerts(state) {
   const body = document.getElementById('certs-body');
   if (!body) return;
   const certs = state.certs;
-  document.getElementById('certs-meta').textContent = certs.length ? `${certs.length} certs` : '';
+  const validCount = certs.filter(c => !c.expired).length;
+  const expiredCount = certs.length - validCount;
+  document.getElementById('certs-meta').textContent = certs.length
+    ? `${validCount} valid · ${expiredCount} expired`
+    : '';
 
   if (!certs.length) {
     body.innerHTML = `<div class="loading-row"><div class="spinner"></div>Fetching certificates…</div>`;
@@ -157,9 +161,13 @@ function renderCerts(state) {
     const expiry = c.notAfter ? new Date(c.notAfter) : null;
     const daysLeft = expiry ? Math.floor((expiry - now) / 86400000) : null;
     const expiryClass = daysLeft === null ? '' : daysLeft < 0 ? 'cert-expired' : daysLeft < 30 ? 'cert-expiring' : 'cert-valid';
+    const rowStyle = c.expired ? ' style="opacity:.45"' : '';
     return `
-      <tr>
-        <td class="col-cert-cn" style="font-family:var(--mono);font-size:var(--fs-sm)">${esc(c.cn)}</td>
+      <tr${rowStyle}>
+        <td class="col-cert-cn" style="font-family:var(--mono);font-size:var(--fs-sm)">
+          ${esc(c.cn)}
+          ${c.expired ? `<span style="font-family:var(--mono);font-size:9px;color:var(--red);border:1px solid rgba(255,59,92,.3);padding:1px 5px;border-radius:2px;margin-left:5px">EXPIRED</span>` : ''}
+        </td>
         <td class="col-cert-sans">
           <span class="cert-san-count" onclick="openSansModal(${i})" title="View SANs">${c.sans.length} SANs</span>
         </td>

@@ -176,6 +176,7 @@ function parseRobtex(data) {
 function parseCRTSH(data) {
   if (!Array.isArray(data)) return [];
   const seen = new Set();
+  const now = new Date();
   const certs = [];
   for (const entry of data) {
     const cn = entry.common_name || '';
@@ -183,6 +184,7 @@ function parseCRTSH(data) {
     const key = cn + '|' + entry.not_before + '|' + entry.not_after;
     if (seen.has(key)) continue;
     seen.add(key);
+    const notAfterDate = entry.not_after ? new Date(entry.not_after) : null;
     certs.push({
       cn,
       sans: [cn, ...sans].filter(Boolean),
@@ -191,9 +193,17 @@ function parseCRTSH(data) {
       notAfter: entry.not_after ? entry.not_after.split('T')[0] : null,
       loggedAt: entry.logged_at ? entry.logged_at.split('T')[0] : null,
       source: 'crt.sh',
+      expired: notAfterDate ? notAfterDate < now : false,
     });
   }
-  return certs.slice(0, 100);
+  // Valid certs first (sorted by expiry desc), expired certs last
+  certs.sort((a, b) => {
+    if (a.expired !== b.expired) return a.expired ? 1 : -1;
+    const da = a.notAfter ? new Date(a.notAfter) : new Date(0);
+    const db = b.notAfter ? new Date(b.notAfter) : new Date(0);
+    return db - da;
+  });
+  return certs.slice(0, 300);
 }
 
 function parseCensys(data) {
