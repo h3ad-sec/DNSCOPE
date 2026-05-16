@@ -551,18 +551,19 @@ function renderCohosted(state) {
 
   const grouped = {};
   list.forEach(item => {
-    if (!grouped[item.ip]) grouped[item.ip] = [];
-    grouped[item.ip].push(item);
+    const key = (item.ip && isIP(item.ip)) ? item.ip : 'unknown';
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(item);
   });
 
-  const html = Object.entries(grouped).map(([ip, items]) => `
+  const html = Object.entries(grouped).map(([ipKey, items]) => `
     <div style="margin-bottom:16px">
-      <div style="font-family:var(--mono);font-size:var(--fs-xs);color:var(--muted);letter-spacing:1.5px;margin-bottom:8px">IP: ${esc(ip)}</div>
+      <div style="font-family:var(--mono);font-size:var(--fs-xs);color:var(--muted);letter-spacing:1.5px;margin-bottom:8px">${ipKey === 'unknown' ? 'SHARED IP: —' : 'IP: ' + esc(ipKey)}</div>
       <div class="cohosted-list">
         ${items.map(item => `
           <div class="cohosted-item">
             <span class="cohosted-domain">${esc(item.domain)}</span>
-            <span class="cohosted-ip">${esc(item.ip)}</span>
+            ${item.ip && isIP(item.ip) ? `<span class="cohosted-ip">${esc(item.ip)}</span>` : ''}
             <span class="src-badge src-${srcClass(item.source)}">${esc(item.source)}</span>
             <button class="btn-copy-ioc" onclick="copyToClip(${JSON.stringify(item.domain)})" title="Copy">⊕</button>
           </div>

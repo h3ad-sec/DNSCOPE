@@ -55,7 +55,8 @@ async function runScan(target, targetType) {
         const shodanPorts = parseShodanPorts(d);
         _scanState.ports = shodanPorts;
         _scanState.fingerprints = { jarm: shodanPorts.jarm, faviconHash: shodanPorts.faviconHash };
-        addCohosted(_scanState.shodanData.hostnames.map(h => ({ domain: h, ip, source: 'Shodan' })));
+        const coIP = _scanState.ips.find(isIP) || (isIP(ip) ? ip : null);
+        addCohosted(_scanState.shodanData.hostnames.map(h => ({ domain: h, ip: coIP, source: 'Shodan' })));
         renderCohosted(_scanState);
         renderCloud(_scanState);
         renderPorts(_scanState);
@@ -70,7 +71,7 @@ async function runScan(target, targetType) {
         const records = parseVTResolutions(d, targetType);
         records.forEach(r => addPDNS(r));
         if (targetType === 'ip') {
-          _scanState.ips = [...new Set([..._scanState.ips, ...records.map(r => r.value).filter(v => v && !isIP(v)).slice(0, 5)])];
+          // VT resolutions for an IP return domains — don't add them to ips
         } else {
           _scanState.ips = [...new Set([..._scanState.ips, ...records.map(r => r.value).filter(isIP)])];
         }
@@ -248,8 +249,9 @@ function addSubdomain(sub, source) {
 }
 
 function addCohosted(item) {
+  if (!item || !item.domain) return;
   if (!_scanState._cohostedKeys) _scanState._cohostedKeys = new Set();
-  const key = item.domain + '|' + item.ip;
+  const key = item.domain + '|' + (item.ip || 'unknown');
   if (_scanState._cohostedKeys.has(key)) return;
   if (item.domain === _scanState.target) return;
   _scanState._cohostedKeys.add(key);
