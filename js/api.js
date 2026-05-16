@@ -13,17 +13,17 @@ async function dsFetch(path, signal) {
 
 /* ── BGPView ───────────────────────────────────────────────────────────── */
 async function apiBGPView(ip, signal) {
-  return dsFetch(`/api/bgpview?ip=${encodeURIComponent(ip)}`, signal);
+  return dsFetch(`/api/net?type=bgp&ip=${encodeURIComponent(ip)}`, signal);
 }
 
 /* ── ipinfo ────────────────────────────────────────────────────────────── */
 async function apiIPInfo(ip, signal) {
-  return dsFetch(`/api/ipinfo?ip=${encodeURIComponent(ip)}`, signal);
+  return dsFetch(`/api/net?type=ip&ip=${encodeURIComponent(ip)}`, signal);
 }
 
 /* ── DNS resolve (server-side) ─────────────────────────────────────────── */
 async function apiResolve(domain, signal) {
-  return dsFetch(`/api/resolve?domain=${encodeURIComponent(domain)}`, signal);
+  return dsFetch(`/api/dns?domain=${encodeURIComponent(domain)}`, signal);
 }
 
 /* ── VirusTotal ────────────────────────────────────────────────────────── */
@@ -51,17 +51,17 @@ async function apiOTXPassiveDNS(target, type, signal) {
 
 /* ── Robtex ────────────────────────────────────────────────────────────── */
 async function apiRobtex(target, type, signal) {
-  return dsFetch(`/api/robtex?type=${type}&q=${encodeURIComponent(target)}`, signal);
+  return dsFetch(`/api/passive?source=robtex&type=${type}&q=${encodeURIComponent(target)}`, signal);
 }
 
 /* ── crt.sh ────────────────────────────────────────────────────────────── */
 async function apiCRTSH(domain, signal) {
-  return dsFetch(`/api/crtsh?q=${encodeURIComponent(domain)}`, signal);
+  return dsFetch(`/api/certs?source=crtsh&q=${encodeURIComponent(domain)}`, signal);
 }
 
 /* ── Censys ────────────────────────────────────────────────────────────── */
 async function apiCensys(domain, signal) {
-  return dsFetch(`/api/censys?q=${encodeURIComponent(domain)}`, signal);
+  return dsFetch(`/api/certs?source=censys&q=${encodeURIComponent(domain)}`, signal);
 }
 
 /* ── Shodan ────────────────────────────────────────────────────────────── */
@@ -71,10 +71,10 @@ async function apiShodan(ip, signal) {
 
 /* ── HackerTarget ──────────────────────────────────────────────────────── */
 async function apiHTSubdomains(domain, signal) {
-  return dsFetch(`/api/hackertarget?type=hostsearch&q=${encodeURIComponent(domain)}`, signal);
+  return dsFetch(`/api/passive?source=ht&type=hostsearch&q=${encodeURIComponent(domain)}`, signal);
 }
 async function apiHTReverseIP(ip, signal) {
-  return dsFetch(`/api/hackertarget?type=reverseip&q=${encodeURIComponent(ip)}`, signal);
+  return dsFetch(`/api/passive?source=ht&type=reverseip&q=${encodeURIComponent(ip)}`, signal);
 }
 
 /* ── HTTP Headers ──────────────────────────────────────────────────────── */

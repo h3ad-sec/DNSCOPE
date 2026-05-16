@@ -46,5 +46,5 @@ export default async function handler(req, res) {
     .filter(r => r.status === 'fulfilled' && r.value)
     .map(r => r.value);
 
-  return res.json({ domain, records });
+  return res.json({ domain, records, addresses: records.A || [] });
 }
