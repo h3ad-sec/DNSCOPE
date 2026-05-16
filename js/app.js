@@ -1,10 +1,15 @@
 /* ══ DNSCOPE — App init ══════════════════════════════════════════════════ */
 
+const ALL_PANELS = [
+  'overview-panel','ti-panel','whois-panel','livedns-panel','email-panel',
+  'asn-panel','pdns-panel','certs-panel','subdomains-panel','cohosted-panel',
+  'ports-panel','fp-panel','cloud-panel','cdnwaf-panel','urlscan-panel',
+];
+
 document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
+    if (e.key === 'Escape')
       document.querySelectorAll('.modal-overlay.open').forEach(m => m.classList.remove('open'));
-    }
     if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') startScan();
   });
   await detectServerStatus();
@@ -21,8 +26,9 @@ async function detectServerStatus() {
       setDot('dot-shodan', s.shodan);
       setDot('dot-censys', s.censys);
       setDot('dot-otx', s.otx);
-      const count = [s.vt, s.shodan, s.censys, s.otx].filter(Boolean).length;
-      showToast(`Server online · ${count}/4 keyed sources`, count >= 3 ? 'success' : 'warning');
+      setDot('dot-urlscan', s.urlscan);
+      const count = [s.vt, s.shodan, s.censys, s.otx, s.urlscan].filter(Boolean).length;
+      showToast(`Server online · ${count}/5 keyed sources`, count >= 3 ? 'success' : 'warning');
       return;
     }
   } catch (_) {}
@@ -62,11 +68,7 @@ async function startScan() {
   document.getElementById('stopBtn').style.display = '';
   document.getElementById('exportBtn').style.display = 'none';
 
-  // Hide all result sections
-  ['overview-panel','asn-panel','pdns-panel','certs-panel','subdomains-panel','cohosted-panel','cloud-panel','cdnwaf-panel']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
-
-  // Reset panel bodies to loading state
+  ALL_PANELS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
   resetSections();
 
   try {
@@ -98,27 +100,57 @@ function clearAll() {
   document.getElementById('stopBtn').style.display = 'none';
   document.getElementById('exportBtn').style.display = 'none';
   document.getElementById('progressPanel').style.display = 'none';
-  ['overview-panel','asn-panel','pdns-panel','certs-panel','subdomains-panel','cohosted-panel','cloud-panel','cdnwaf-panel']
-    .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  ALL_PANELS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
 }
 
 function resetSections() {
-  const loading = (label) => `<div class="loading-row"><div class="spinner"></div>${label}</div>`;
-  document.getElementById('asn-body').innerHTML = loading('Fetching ASN…');
-  document.getElementById('pdns-body').innerHTML = loading('Fetching passive DNS…');
-  document.getElementById('certs-body').innerHTML = loading('Fetching certificates…');
-  document.getElementById('subdomains-body').innerHTML = loading('Enumerating subdomains…');
-  document.getElementById('cohosted-body').innerHTML = loading('Checking co-hosted domains…');
-  document.getElementById('cloud-body').innerHTML = loading('Detecting provider…');
-  document.getElementById('cdnwaf-body').innerHTML = loading('Detecting CDN/WAF…');
+  const loading = label => `<div class="loading-row"><div class="spinner"></div>${label}</div>`;
+  const bodies = {
+    'asn-body': 'Fetching ASN…',
+    'pdns-body': 'Fetching passive DNS…',
+    'certs-body': 'Fetching certificates…',
+    'subdomains-body': 'Enumerating subdomains…',
+    'cohosted-body': 'Checking co-hosted domains…',
+    'cloud-body': 'Detecting provider…',
+    'cdnwaf-body': 'Detecting CDN/WAF…',
+    'ti-body': 'Querying threat intel…',
+    'whois-body': 'Fetching WHOIS…',
+    'livedns-body': 'Resolving DNS records…',
+    'email-body': 'Analysing email config…',
+    'ports-body': 'Fetching port data…',
+    'fp-body': 'Extracting fingerprints…',
+    'urlscan-body': 'Submitting to URLScan…',
+  };
+  Object.entries(bodies).forEach(([id, label]) => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = loading(label);
+  });
   document.getElementById('overviewGrid').innerHTML = '';
-  document.getElementById('asn-meta').textContent = '';
-  document.getElementById('pdns-meta').textContent = '';
-  document.getElementById('certs-meta').textContent = '';
-  document.getElementById('subdomains-meta').textContent = '';
-  document.getElementById('cohosted-meta').textContent = '';
-  document.getElementById('cloud-meta').textContent = '';
-  document.getElementById('cdnwaf-meta').textContent = '';
+  ['asn','pdns','certs','subdomains','cohosted','cloud','cdnwaf',
+   'ti','whois','livedns','email','ports','fp','urlscan'].forEach(p => {
+    const el = document.getElementById(p + '-meta');
+    if (el) el.textContent = '';
+  });
+}
+
+function copyToClip(text) {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => showToast('Copied: ' + String(text).slice(0, 50), 'success'))
+      .catch(() => _fallbackCopy(text));
+  } else {
+    _fallbackCopy(text);
+  }
+}
+
+function _fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.cssText = 'position:fixed;top:-9999px;left:-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand('copy'); showToast('Copied', 'success'); } catch (_) {}
+  ta.remove();
 }
 
 /* ── Toast ───────────────────────────────────────────────────────────────── */

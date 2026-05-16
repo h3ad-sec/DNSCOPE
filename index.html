@@ -109,7 +109,9 @@
         <div class="hstatus-divider"></div>
         <div class="hstatus-item"><div class="hstatus-dot" id="dot-otx"></div><span>OTX</span></div>
         <div class="hstatus-divider"></div>
-        <div class="hstatus-item"><div class="hstatus-dot" id="dot-free" style="background:var(--green)"></div><span>BGPView · crt.sh · HT · Robtex</span></div>
+        <div class="hstatus-item"><div class="hstatus-dot" id="dot-urlscan"></div><span>URLSCAN</span></div>
+        <div class="hstatus-divider"></div>
+        <div class="hstatus-item"><div class="hstatus-dot" id="dot-free" style="background:var(--green)"></div><span>BGPView · crt.sh · HT · Robtex · ThreatFox · RDAP</span></div>
       </div>
       <div class="hero-right">
         <span class="managed-badge">MANAGED</span>
@@ -139,7 +141,7 @@
             <button class="btn btn-primary" id="scanBtn" onclick="startScan()" disabled>SCAN</button>
             <button class="btn btn-stop" id="stopBtn" onclick="stopScan()" style="display:none">■ STOP</button>
             <button class="btn btn-secondary" onclick="clearAll()">CLEAR</button>
-            <div class="rate-note">8 sources · Parallel · Managed</div>
+            <div class="rate-note">12 sources · Parallel · Managed</div>
             <button class="btn btn-export" id="exportBtn" onclick="openExportModal()" style="display:none">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                 <path d="M6 1v7M3 5l3 3 3-3M1 9v2h10V9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -168,6 +170,54 @@
         </div>
         <div class="panel-body">
           <div class="overview-grid" id="overviewGrid"></div>
+        </div>
+      </div>
+
+      <!-- Threat Intelligence -->
+      <div class="panel" id="ti-panel" style="display:none">
+        <div class="panel-header" onclick="togglePanel('ti-panel')">
+          <div class="panel-title">THREAT INTELLIGENCE</div>
+          <div class="panel-meta" id="ti-meta"></div>
+          <div class="panel-chevron" id="ti-chevron">▲</div>
+        </div>
+        <div class="panel-body" id="ti-body">
+          <div class="loading-row"><div class="spinner"></div>Querying threat intel…</div>
+        </div>
+      </div>
+
+      <!-- WHOIS / RDAP -->
+      <div class="panel" id="whois-panel" style="display:none">
+        <div class="panel-header" onclick="togglePanel('whois-panel')">
+          <div class="panel-title">WHOIS · RDAP</div>
+          <div class="panel-meta" id="whois-meta"></div>
+          <div class="panel-chevron" id="whois-chevron">▲</div>
+        </div>
+        <div class="panel-body" id="whois-body">
+          <div class="loading-row"><div class="spinner"></div>Fetching WHOIS…</div>
+        </div>
+      </div>
+
+      <!-- Live DNS -->
+      <div class="panel" id="livedns-panel" style="display:none">
+        <div class="panel-header" onclick="togglePanel('livedns-panel')">
+          <div class="panel-title">LIVE DNS RECORDS</div>
+          <div class="panel-meta" id="livedns-meta"></div>
+          <div class="panel-chevron" id="livedns-chevron">▲</div>
+        </div>
+        <div class="panel-body" id="livedns-body">
+          <div class="loading-row"><div class="spinner"></div>Resolving DNS records…</div>
+        </div>
+      </div>
+
+      <!-- Email Infrastructure -->
+      <div class="panel" id="email-panel" style="display:none">
+        <div class="panel-header" onclick="togglePanel('email-panel')">
+          <div class="panel-title">EMAIL INFRASTRUCTURE</div>
+          <div class="panel-meta" id="email-meta"></div>
+          <div class="panel-chevron" id="email-chevron">▲</div>
+        </div>
+        <div class="panel-body" id="email-body">
+          <div class="loading-row"><div class="spinner"></div>Analysing email config…</div>
         </div>
       </div>
 
@@ -231,6 +281,30 @@
         </div>
       </div>
 
+      <!-- Ports / Services -->
+      <div class="panel" id="ports-panel" style="display:none">
+        <div class="panel-header" onclick="togglePanel('ports-panel')">
+          <div class="panel-title">PORTS · SERVICES</div>
+          <div class="panel-meta" id="ports-meta"></div>
+          <div class="panel-chevron" id="ports-chevron">▲</div>
+        </div>
+        <div class="panel-body" id="ports-body">
+          <div class="loading-row"><div class="spinner"></div>Fetching port data…</div>
+        </div>
+      </div>
+
+      <!-- Fingerprints -->
+      <div class="panel" id="fp-panel" style="display:none">
+        <div class="panel-header" onclick="togglePanel('fp-panel')">
+          <div class="panel-title">FINGERPRINTS · JARM · FAVICON</div>
+          <div class="panel-meta" id="fp-meta"></div>
+          <div class="panel-chevron" id="fp-chevron">▲</div>
+        </div>
+        <div class="panel-body" id="fp-body">
+          <div class="loading-row"><div class="spinner"></div>Extracting fingerprints…</div>
+        </div>
+      </div>
+
       <!-- Cloud / Hosting -->
       <div class="panel" id="cloud-panel" style="display:none">
         <div class="panel-header" onclick="togglePanel('cloud-panel')">
@@ -255,6 +329,18 @@
         </div>
       </div>
 
+      <!-- URLScan -->
+      <div class="panel" id="urlscan-panel" style="display:none">
+        <div class="panel-header" onclick="togglePanel('urlscan-panel')">
+          <div class="panel-title">URLSCAN · SCREENSHOT</div>
+          <div class="panel-meta" id="urlscan-meta"></div>
+          <div class="panel-chevron" id="urlscan-chevron">▲</div>
+        </div>
+        <div class="panel-body" id="urlscan-body">
+          <div class="loading-row"><div class="spinner"></div>Submitting to URLScan…</div>
+        </div>
+      </div>
+
     </main>
 
     <footer class="site-footer">
@@ -263,7 +349,7 @@
         <span class="footer-sep">/</span>
         <span class="footer-project">DNSCOPE</span>
         <span class="footer-sep">//</span>
-        <span>VT · OTX · Shodan · Censys · crt.sh · BGPView · HackerTarget · Robtex · ipinfo</span>
+        <span>VT · OTX · Shodan · Censys · crt.sh · BGPView · HT · Robtex · ipinfo · URLScan · ThreatFox · RDAP</span>
         <span class="footer-sep">//</span>
         <span>Map the Infrastructure.</span>
       </div>
@@ -294,6 +380,8 @@
           <div class="exp-radio-group">
             <label class="exp-radio"><input type="radio" name="exp-fmt" value="json" checked> JSON</label>
             <label class="exp-radio"><input type="radio" name="exp-fmt" value="md"> Markdown</label>
+            <label class="exp-radio"><input type="radio" name="exp-fmt" value="stix"> STIX 2.1</label>
+            <label class="exp-radio"><input type="radio" name="exp-fmt" value="misp"> MISP</label>
           </div>
         </div>
         <div style="display:flex;gap:10px;justify-content:flex-end">

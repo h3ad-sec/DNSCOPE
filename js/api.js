@@ -356,3 +356,181 @@ function detectCDNWAF(headers, shodanHTTP, cnames) {
 function isIPv4(s) { return /^(\d{1,3}\.){3}\d{1,3}$/.test(s.trim()); }
 function isIPv6(s) { return s.includes(':') && !s.includes('/'); }
 function isIP(s) { return isIPv4(s) || isIPv6(s); }
+
+/* ── WHOIS / RDAP ──────────────────────────────────────────────────────── */
+async function apiWHOIS(domain, signal) {
+  return dsFetch(`/api/whois?domain=${encodeURIComponent(domain)}`, signal);
+}
+
+/* ── Live DNS ──────────────────────────────────────────────────────────── */
+async function apiDNS(domain, signal) {
+  return dsFetch(`/api/dns?domain=${encodeURIComponent(domain)}`, signal);
+}
+
+/* ── ThreatFox ─────────────────────────────────────────────────────────── */
+async function apiThreatFox(ioc, signal) {
+  return dsFetch(`/api/threatfox?ioc=${encodeURIComponent(ioc)}`, signal);
+}
+
+/* ── URLScan ───────────────────────────────────────────────────────────── */
+async function apiURLScan(url, signal) {
+  return dsFetch(`/api/urlscan?url=${encodeURIComponent(url)}`, signal);
+}
+async function apiURLScanResult(uuid, signal) {
+  return dsFetch(`/api/urlscan?uuid=${encodeURIComponent(uuid)}`, signal);
+}
+
+/* ── VT indicator — full report ─────────────────────────────────────────── */
+async function apiVTIndicator(target, type, signal) {
+  const path = type === 'ip'
+    ? `/api/v3/ip_addresses/${encodeURIComponent(target)}`
+    : `/api/v3/domains/${encodeURIComponent(target)}`;
+  return apiVT(path, signal);
+}
+
+/* ── OTX general indicator ──────────────────────────────────────────────── */
+async function apiOTXIndicator(target, type, signal) {
+  const section = type === 'ip' ? 'IPv4' : 'domain';
+  return apiOTX(`/api/v1/indicators/${section}/${encodeURIComponent(target)}/general`, signal);
+}
+
+/* ── New parsers ───────────────────────────────────────────────────────── */
+
+function parseRDAP(data) {
+  if (!data || data.errorCode) return null;
+
+  const getVcard = entity => {
+    const vcard = {};
+    (entity?.vcardArray?.[1] || []).forEach(([key, , , val]) => {
+      if (typeof val === 'string') vcard[key] = val;
+    });
+    return vcard;
+  };
+
+  const registrant = (data.entities || []).find(e => (e.roles || []).includes('registrant'));
+  const registrar  = (data.entities || []).find(e => (e.roles || []).includes('registrar'));
+  const regCard    = getVcard(registrant);
+  const rarCard    = getVcard(registrar);
+
+  const ev = action => (data.events || []).find(e => e.eventAction === action)?.eventDate || null;
+  const created = ev('registration');
+  const updated = ev('last changed');
+  const expiry  = ev('expiration');
+
+  const createdDate = created ? new Date(created) : null;
+  const daysSince = createdDate ? Math.floor((Date.now() - createdDate) / 86400000) : null;
+
+  return {
+    domain: data.ldhName || data.handle || null,
+    status: data.status || [],
+    nameservers: (data.nameservers || []).map(ns => ns.ldhName || ns.unicodeName || '').filter(Boolean),
+    registrar: rarCard.fn || rarCard.org || null,
+    registrant: regCard.fn || regCard.org || null,
+    created, updated, expiry,
+    daysSince,
+    isNRD: daysSince !== null && daysSince <= 30,
+  };
+}
+
+function parseLiveDNS(data) {
+  return data?.records || null;
+}
+
+function parseThreatFox(data) {
+  if (!data || data.query_status === 'no_results') return { found: false, iocs: [] };
+  const iocs = (data.data || []).map(ioc => ({
+    id: ioc.id,
+    iocType: ioc.ioc_type,
+    ioc: ioc.ioc,
+    malware: ioc.malware_printable || ioc.malware,
+    confidence: ioc.confidence_level,
+    tags: ioc.tags || [],
+    reporter: ioc.reporter,
+    firstSeen: ioc.first_seen_utc,
+    threatType: ioc.threat_type,
+  }));
+  return { found: iocs.length > 0, iocs, queryStatus: data.query_status };
+}
+
+function parseVTIndicator(data) {
+  if (!data?.data?.attributes) return null;
+  const attrs = data.data.attributes;
+  const stats = attrs.last_analysis_stats || {};
+  const total = Object.values(stats).reduce((a, b) => a + b, 0);
+  return {
+    malicious:  stats.malicious  || 0,
+    suspicious: stats.suspicious || 0,
+    harmless:   stats.harmless   || 0,
+    undetected: stats.undetected || 0,
+    total,
+    reputation: attrs.reputation || 0,
+    tags: attrs.tags || [],
+    lastAnalysisDate: attrs.last_analysis_date
+      ? new Date(attrs.last_analysis_date * 1000).toISOString().split('T')[0]
+      : null,
+  };
+}
+
+function parseOTXIndicator(data) {
+  if (!data) return null;
+  return {
+    pulseCount: data.pulse_info?.count || 0,
+    pulses: (data.pulse_info?.pulses || []).slice(0, 10).map(p => ({
+      name: p.name,
+      created: p.created ? p.created.split('T')[0] : null,
+      tags: p.tags || [],
+    })),
+    reputation: data.reputation || 0,
+  };
+}
+
+function parseShodanPorts(data) {
+  if (!data || data.error) return { ports: [], services: [], jarm: null, faviconHash: null, vulns: [], tags: [] };
+  const services = (data.data || []).map(svc => ({
+    port: svc.port,
+    protocol: svc.transport || 'tcp',
+    product: svc.product || null,
+    version: svc.version || null,
+    banner: svc.data ? svc.data.slice(0, 200) : null,
+    ssl: svc.ssl ? {
+      cert: svc.ssl.cert?.subject?.CN || null,
+      issuer: svc.ssl.cert?.issuer?.CN || null,
+    } : null,
+    http: svc.http ? { title: svc.http.title || null, server: svc.http.server || null } : null,
+  }));
+  const jarmEntry = (data.data || []).find(s => s.ssl?.jarm);
+  const httpEntry = (data.data || []).find(s => s.http?.favicon?.hash);
+  return {
+    ports: data.ports || [],
+    services,
+    jarm: jarmEntry?.ssl?.jarm || null,
+    faviconHash: httpEntry?.http?.favicon?.hash ?? null,
+    vulns: data.vulns ? Object.keys(data.vulns) : [],
+    tags: data.tags || [],
+  };
+}
+
+function parseURLScan(data) {
+  if (!data) return null;
+  if (data.pending) return { pending: true, uuid: data.uuid, resultUrl: data.resultUrl };
+  const page = data.page || {};
+  const tech = data.meta?.processors?.wappa?.data || [];
+  return {
+    uuid: data.uuid || null,
+    resultUrl: data.resultUrl || data.task?.reportURL || null,
+    screenshotUrl: data.task?.screenshotURL || null,
+    url: page.url || null,
+    domain: page.domain || null,
+    ip: page.ip || null,
+    server: page.server || null,
+    title: page.title || null,
+    country: page.country || null,
+    tlsIssuer: page.tlsIssuer || null,
+    technologies: tech.map(t => t.app || t.name).filter(Boolean),
+    linkedDomains: (data.lists?.domains || []).slice(0, 20),
+    requestCount: data.stats?.requests || 0,
+    malicious: data.stats?.malicious || 0,
+    securityVendorFlags: data.verdicts?.overall?.malicious || false,
+    pending: false,
+  };
+}

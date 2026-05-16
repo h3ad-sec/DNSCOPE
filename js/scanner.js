@@ -14,6 +14,8 @@ async function runScan(target, targetType) {
     pdns: [], certs: [], subdomains: {}, cohosted: [],
     cloud: null, cdnwaf: [], headers: null,
     shodanData: null, cnames: [],
+    whois: null, liveDNS: null,
+    ti: {}, ports: null, fingerprints: null, urlscan: null,
     scannedAt: new Date().toISOString(),
   };
 
@@ -22,7 +24,6 @@ async function runScan(target, targetType) {
   setProgress('RESOLVING TARGET…', 5, '');
   showAllSections(isDomain);
 
-  // Step 1: Resolve domain → IPs (parallel with other calls)
   const resolvePromise = isDomain
     ? apiResolve(target, sig).then(d => {
         if (d?.addresses?.length) {
@@ -35,7 +36,6 @@ async function runScan(target, targetType) {
 
   await resolvePromise;
 
-  // After resolve, we have IPs. Run everything in parallel.
   const ip = _scanState.ips[0] || target;
 
   const tasks = [
@@ -48,13 +48,18 @@ async function runScan(target, targetType) {
       .then(d => { _scanState.ipInfo = parseIPInfo(d); renderCloud(_scanState); })
       .catch(() => { _scanState.ipInfo = null; renderCloud(_scanState); }),
 
-    // Shodan (always, needed for co-hosted + CDN)
+    // Shodan (always — co-hosted, CDN, ports, fingerprints)
     apiShodan(ip, sig)
       .then(d => {
         _scanState.shodanData = parseShodan(d);
+        const shodanPorts = parseShodanPorts(d);
+        _scanState.ports = shodanPorts;
+        _scanState.fingerprints = { jarm: shodanPorts.jarm, faviconHash: shodanPorts.faviconHash };
         addCohosted(_scanState.shodanData.hostnames.map(h => ({ domain: h, ip, source: 'Shodan' })));
         renderCohosted(_scanState);
         renderCloud(_scanState);
+        renderPorts(_scanState);
+        renderFingerprints(_scanState);
         updateCDNWAF(_scanState);
       })
       .catch(() => { renderCohosted(_scanState); }),
@@ -65,11 +70,9 @@ async function runScan(target, targetType) {
         const records = parseVTResolutions(d, targetType);
         records.forEach(r => addPDNS(r));
         if (targetType === 'ip') {
-          const newDomains = records.map(r => r.value).filter(v => v && !isIP(v));
-          _scanState.ips = [...new Set([..._scanState.ips, ...newDomains.slice(0, 5)])];
+          _scanState.ips = [...new Set([..._scanState.ips, ...records.map(r => r.value).filter(v => v && !isIP(v)).slice(0, 5)])];
         } else {
-          const newIPs = records.map(r => r.value).filter(isIP);
-          _scanState.ips = [...new Set([..._scanState.ips, ...newIPs])];
+          _scanState.ips = [...new Set([..._scanState.ips, ...records.map(r => r.value).filter(isIP)])];
         }
         renderPDNS(_scanState);
       })
@@ -85,6 +88,33 @@ async function runScan(target, targetType) {
       .then(d => { parseRobtex(d).forEach(r => addPDNS(r)); renderPDNS(_scanState); })
       .catch(() => {}),
 
+    // VT indicator — full report (always)
+    apiVTIndicator(target, targetType, sig)
+      .then(d => {
+        if (!_scanState.ti) _scanState.ti = {};
+        _scanState.ti.vt = parseVTIndicator(d);
+        renderTI(_scanState);
+      })
+      .catch(() => {}),
+
+    // OTX general indicator (always)
+    apiOTXIndicator(target, targetType, sig)
+      .then(d => {
+        if (!_scanState.ti) _scanState.ti = {};
+        _scanState.ti.otx = parseOTXIndicator(d);
+        renderTI(_scanState);
+      })
+      .catch(() => {}),
+
+    // ThreatFox (always — public API)
+    apiThreatFox(target, sig)
+      .then(d => {
+        if (!_scanState.ti) _scanState.ti = {};
+        _scanState.ti.threatfox = parseThreatFox(d);
+        renderTI(_scanState);
+      })
+      .catch(() => {}),
+
     // Domain-only tasks
     ...(isDomain ? [
       // crt.sh
@@ -92,10 +122,8 @@ async function runScan(target, targetType) {
         .then(d => {
           const certs = parseCRTSH(d);
           certs.forEach(c => addCert(c));
-          // Extract subdomains from SANs
           certs.forEach(c => c.sans.forEach(san => {
             if (san === target || san.endsWith('.' + target)) addSubdomain(san, 'crt.sh');
-            // Extract CNAMEs from SAN wildcards for CDN detection
             if (san.includes('.') && !san.startsWith('*')) _scanState.cnames.push(san);
           }));
           renderCerts(_scanState);
@@ -105,29 +133,20 @@ async function runScan(target, targetType) {
 
       // Censys
       apiCensys(target, sig)
-        .then(d => {
-          parseCensys(d).forEach(c => addCert(c));
-          renderCerts(_scanState);
-        })
+        .then(d => { parseCensys(d).forEach(c => addCert(c)); renderCerts(_scanState); })
         .catch(() => {}),
 
       // VT subdomains
       apiVTSubdomains(target, sig)
-        .then(d => {
-          parseVTSubdomains(d).forEach(s => addSubdomain(s, 'VT'));
-          renderSubdomains(_scanState);
-        })
+        .then(d => { parseVTSubdomains(d).forEach(s => addSubdomain(s, 'VT')); renderSubdomains(_scanState); })
         .catch(() => {}),
 
       // HackerTarget subdomains
       apiHTSubdomains(target, sig)
-        .then(d => {
-          parseHTSubdomains(d.text || d).forEach(s => addSubdomain(s, 'HackerTarget'));
-          renderSubdomains(_scanState);
-        })
+        .then(d => { parseHTSubdomains(d.text || d).forEach(s => addSubdomain(s, 'HackerTarget')); renderSubdomains(_scanState); })
         .catch(() => {}),
 
-      // HackerTarget reverse IP (after IPs are known)
+      // HackerTarget reverse IP
       resolvePromise.then(() => {
         const resolvedIP = _scanState.ips.find(isIP) || ip;
         return apiHTReverseIP(resolvedIP, sig)
@@ -140,11 +159,28 @@ async function runScan(target, targetType) {
 
       // HTTP headers
       apiHeaders(target, sig)
+        .then(d => { _scanState.headers = d?.headers || {}; updateCDNWAF(_scanState); })
+        .catch(() => {}),
+
+      // WHOIS / RDAP
+      apiWHOIS(target, sig)
+        .then(d => { _scanState.whois = parseRDAP(d); renderWHOIS(_scanState); })
+        .catch(() => { renderWHOIS(_scanState); }),
+
+      // Live DNS
+      apiDNS(target, sig)
         .then(d => {
-          _scanState.headers = d?.headers || {};
-          updateCDNWAF(_scanState);
+          _scanState.liveDNS = parseLiveDNS(d);
+          renderLiveDNS(_scanState);
+          renderEmailInfra(_scanState);
         })
         .catch(() => {}),
+
+      // URLScan
+      apiURLScan('https://' + target, sig)
+        .then(d => { _scanState.urlscan = parseURLScan(d); renderURLScan(_scanState); })
+        .catch(() => {}),
+
     ] : [
       // IP-only: HackerTarget reverse IP
       apiHTReverseIP(ip, sig)
@@ -166,9 +202,18 @@ async function runScan(target, targetType) {
   renderCohosted(_scanState);
   renderCloud(_scanState);
   renderCDNWAF(_scanState);
+  renderTI(_scanState);
+  renderWHOIS(_scanState);
+  renderLiveDNS(_scanState);
+  renderEmailInfra(_scanState);
+  renderPorts(_scanState);
+  renderFingerprints(_scanState);
+  renderURLScan(_scanState);
   renderOverview(_scanState);
 
-  setProgress('COMPLETE', 100, `${_scanState.pdns.length} passive DNS · ${Object.keys(_scanState.subdomains).length} subdomains · ${_scanState.certs.length} certs`);
+  const subCount = Object.keys(_scanState.subdomains).length;
+  setProgress('COMPLETE', 100,
+    `${_scanState.pdns.length} passive DNS · ${subCount} subdomains · ${_scanState.certs.length} certs`);
   setTimeout(() => { document.getElementById('progressPanel').style.display = 'none'; }, 2000);
 
   document.getElementById('exportBtn').style.display = '';
@@ -225,16 +270,12 @@ function setProgress(label, pct, sub) {
 }
 
 function showAllSections(isDomain) {
-  const ids = ['overview-panel', 'asn-panel', 'pdns-panel', 'cloud-panel', 'cohosted-panel', 'cdnwaf-panel'];
-  if (isDomain) ids.push('certs-panel', 'subdomains-panel');
-  ids.forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.style.display = '';
-  });
+  const ids = ['overview-panel', 'ti-panel', 'asn-panel', 'pdns-panel',
+    'cloud-panel', 'cohosted-panel', 'ports-panel', 'fp-panel', 'cdnwaf-panel'];
+  if (isDomain) ids.push('certs-panel', 'subdomains-panel',
+    'whois-panel', 'livedns-panel', 'email-panel', 'urlscan-panel');
+  ids.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
 }
 
-function abortScan() {
-  _scanController?.abort();
-}
-
+function abortScan() { _scanController?.abort(); }
 function getScanState() { return _scanState; }

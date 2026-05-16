@@ -7,5 +7,6 @@ export default async function handler(req, res) {
     otx:     !!process.env.OTX_API_KEY,
     shodan:  !!process.env.SHODAN_API_KEY,
     censys:  !!process.env.CENSYS_API_TOKEN,
+    urlscan: !!process.env.URLSCAN_API_KEY,
   });
 }
