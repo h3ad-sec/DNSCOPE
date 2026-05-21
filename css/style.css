@@ -89,8 +89,6 @@ body.light .toggle-thumb{transform:translateX(22px);}
 
 /* ── Hero strip ─────────────────────────────────────────────────────────── */
 .xv-hero{position:fixed;top:var(--nav-h);left:0;right:0;z-index:40;background:var(--panel);border-bottom:1px solid var(--border);height:var(--hero-h);padding:0 1.5rem;transition:transform .35s cubic-bezier(.4,0,.2,1),opacity .3s ease,background .3s,border-color .3s;}
-body.hero-hidden .xv-hero{transform:translateY(-100%);opacity:0;pointer-events:none;}
-body.hero-hidden .wrapper{padding-top:calc(var(--nav-h) + 20px);}
 
 /* ── Scroll sentinel ─────────────────────────────────────────────────────── */
 #scroll-sentinel{position:absolute;top:0;left:0;width:1px;height:10px;pointer-events:none;}
@@ -452,10 +450,10 @@ tr:hover .btn-copy-ioc,.subdomain-item:hover .btn-copy-ioc,.cohosted-item:hover 
 .ov-nrd{display:inline-flex;align-items:center;gap:5px;font-family:var(--mono);font-size:var(--fs-xs);padding:2px 8px;border-radius:3px;margin-top:6px;font-weight:700;}
 
 /* ── Responsive ─────────────────────────────────────────────────────────── */
+body.nav-compact .nav-links{display:none;}
+body.nav-compact .hamburger{display:flex;}
 @media(max-width:1000px){
-  .nav-links{display:none;} .hamburger{display:flex;}
-  .wrapper{padding-left:14px;padding-right:14px;padding-top:calc(var(--nav-h) + 20px);}
-  body.hero-hidden .wrapper{padding-top:calc(var(--nav-h) + 20px);}
+  .wrapper{padding-left:14px;padding-right:14px;}
   .xv-hero{display:none;}
   .xv-nav-pill{opacity:1;transform:none;pointer-events:auto;transition:none;}
   .overview-grid{grid-template-columns:1fr;}
