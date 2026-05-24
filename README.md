@@ -17,6 +17,7 @@ DNSCOPE takes a single domain or IP address and maps its full infrastructure acr
 - Cloud provider identification (AWS, Azure, GCP, Cloudflare, etc.)
 - CDN and WAF fingerprinting via HTTP headers and CNAME analysis
 - Export results as JSON or Markdown
+- Fully responsive — works on mobile, tablet, and desktop
 
 ## Data Sections
 
@@ -44,9 +45,9 @@ DNSCOPE is a sub-tool under [H3AD-X](https://h3ad-sec.github.io/H3AD-X/), the th
 | Module | Tools |
 |--------|-------|
 | [H3AD-X](https://h3ad-sec.github.io/H3AD-X/) | X-VERDIKT, PARSE-X, DNSCOPE |
-| [H3AD-AI](https://h3ad-sec.github.io/H3AD-AI/) | INSIGHT-AI, QUERYCRAFT-AI, FPLENS-AI, ATTMAP-AI, CHRONO-AI, THREATBRIEF-AI, PERSONA-AI, DEBRIEF-AI, MALBRIEF-AI |
+| [H3AD-AI](https://h3ad-sec.github.io/H3AD-AI/) | INSIGHT-AI, QUERYCRAFT-AI, FPLENS-AI, ATTMAP-AI, CHRONO-AI, MALBRIEF-AI |
 | [H3AD-DETECT](https://h3ad-sec.github.io/H3AD-DETECT/) | TRACERULES |
 | [H3AD-HUNT](https://h3ad-sec.github.io/H3AD-HUNT/) | HYPOS, PIVEX, TRACEPULSE |
-| [H3AD-OPS](https://h3ad-sec.github.io/H3AD-OPS/) | QUICKTRACE, SHIFTLOG |
-| [H3AD-DF](https://h3ad-sec.github.io/H3AD-DF/) | REGSCOPE, MALBRIEF-AI, EVTXPARSE, ARTIFACTDB |
-| [H3AD-IR](https://h3ad-sec.github.io/H3AD-IR/) | DEBRIEF-AI, CASEBOARD |
+| [H3AD-OPS](https://h3ad-sec.github.io/H3AD-OPS/) | QUICKTRACE, SHIFTLOG, PHISHOPS |
+| [H3AD-DF](https://h3ad-sec.github.io/H3AD-DF/) | REGSCOPE |
+| [H3AD-IR](https://h3ad-sec.github.io/H3AD-IR/) | — |
