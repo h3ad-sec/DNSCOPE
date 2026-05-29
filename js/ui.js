@@ -1,13 +1,81 @@
 /* ══ DNSCOPE — UI renderers ══════════════════════════════════════════════ */
 
+function computeRiskScore(state) {
+  let score = 0;
+  const signals = [];
+
+  const vtMal = state.ti?.vt?.malicious || 0;
+  const vtTotal = state.ti?.vt?.total || 0;
+  if (vtMal >= 10)      { score += 40; signals.push(`VT: ${vtMal}/${vtTotal} malicious`); }
+  else if (vtMal >= 5)  { score += 28; signals.push(`VT: ${vtMal}/${vtTotal} malicious`); }
+  else if (vtMal >= 1)  { score += 14; signals.push(`VT: ${vtMal}/${vtTotal} malicious`); }
+
+  const tfFound = state.ti?.threatfox?.found;
+  const tfCount = state.ti?.threatfox?.iocs?.length || 0;
+  if (tfFound) { score += 28; signals.push(`ThreatFox: ${tfCount} IOC${tfCount > 1 ? 's' : ''}`); }
+
+  const otxPulses = state.ti?.otx?.pulseCount || 0;
+  if (otxPulses >= 10)     { score += 18; signals.push(`OTX: ${otxPulses} pulses`); }
+  else if (otxPulses >= 3) { score += 10; signals.push(`OTX: ${otxPulses} pulses`); }
+
+  const daysSince = state.whois?.daysSince;
+  if (daysSince !== null && daysSince !== undefined) {
+    if (daysSince <= 7)       { score += 35; signals.push(`NRD: ${daysSince}d old`); }
+    else if (daysSince <= 30) { score += 20; signals.push(`NRD: ${daysSince}d old`); }
+  }
+
+  const vulns = state.ports?.vulns || [];
+  if (vulns.length) { score += 20; signals.push(`Shodan: ${vulns.length} CVE${vulns.length > 1 ? 's' : ''}`); }
+
+  const BULLETPROOF = ['9009','49453','197695','8972','20860','59642','209828','57169','41108','35624'];
+  const asnNum = String(state.asn?.asn || '');
+  if (asnNum && BULLETPROOF.includes(asnNum)) { score += 22; signals.push(`Bulletproof ASN: AS${asnNum}`); }
+
+  const registrant = state.whois?.registrant || '';
+  if (state.targetType === 'domain' && state.whois &&
+      (!registrant || /redact|privacy|protect/i.test(registrant))) {
+    score += 5; signals.push('WHOIS: registrant redacted');
+  }
+
+  const hasDMARC = (state.liveDNS?.DMARC || []).length > 0;
+  if (state.targetType === 'domain' && state.liveDNS && !hasDMARC) {
+    score += 5; signals.push('No DMARC');
+  }
+
+  score = Math.min(100, score);
+  const level = score >= 70 ? 'CRITICAL' : score >= 45 ? 'HIGH' : score >= 20 ? 'MEDIUM' : 'LOW';
+  return { score, level, signals };
+}
+
+function riskColor(level) {
+  return { LOW: 'var(--green)', MEDIUM: 'var(--yellow)', HIGH: 'var(--vt)', CRITICAL: 'var(--red)' }[level] || 'var(--muted)';
+}
+
 function renderOverview(state) {
   const grid = document.getElementById('overviewGrid');
   if (!grid) return;
   const ips = state.ips.filter(isIP);
   const asn = state.asn;
   const ipInfo = state.ipInfo;
+  const risk = computeRiskScore(state);
+  const rc = riskColor(risk.level);
 
   grid.innerHTML = `
+    <div style="grid-column:1/-1;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:4px">
+      <div class="ov-label" style="margin-bottom:8px">RISK SCORE</div>
+      <div class="risk-strip">
+        <div class="risk-meter"><div class="risk-fill" style="width:${risk.score}%;background:${rc}"></div></div>
+        <div class="risk-row">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span class="risk-score-num" style="color:${rc}">${risk.score}</span>
+            <span class="risk-badge risk-${risk.level.toLowerCase()}">${risk.level}</span>
+          </div>
+          ${risk.signals.length
+            ? `<div class="risk-signals">${risk.signals.map(s => `<span class="risk-signal">${esc(s)}</span>`).join('')}</div>`
+            : `<div style="font-family:var(--mono);font-size:var(--fs-xs);color:var(--green)">No risk signals detected.</div>`}
+        </div>
+      </div>
+    </div>
     <div class="ov-block">
       <div class="ov-label">TARGET</div>
       <div class="ov-target">${esc(state.target)}</div>
@@ -391,6 +459,31 @@ function renderEmailInfra(state) {
   `;
 }
 
+function buildPDNSTimeline(records) {
+  const parseDate = s => s ? new Date(s).getTime() : null;
+  const firsts = records.map(r => parseDate(r.first || r.date)).filter(Boolean);
+  if (!firsts.length) return null;
+  const lasts = records.map(r => parseDate(r.last)).filter(Boolean);
+  const globalMin = Math.min(...firsts);
+  const globalMax = Math.max(Date.now(), ...(lasts.length ? lasts : firsts));
+  const totalRange = globalMax - globalMin;
+  if (!totalRange) return null;
+  const now = Date.now();
+  return records.map(r => {
+    const first = parseDate(r.first || r.date);
+    if (!first) return null;
+    const last = parseDate(r.last) || now;
+    const startPct = ((first - globalMin) / totalRange) * 100;
+    const widthPct = Math.max(((last - globalMin) / totalRange) * 100 - startPct, 3);
+    const color = first > now - 30 * 86400000
+      ? 'var(--red)'
+      : last > now - 90 * 86400000
+        ? 'var(--accent)'
+        : 'var(--accent2)';
+    return { startPct, widthPct, color };
+  });
+}
+
 function renderPDNS(state) {
   const body = document.getElementById('pdns-body');
   if (!body) return;
@@ -402,17 +495,25 @@ function renderPDNS(state) {
     return;
   }
 
-  const rows = records.slice(0, 200).map(r => `
+  const display = records.slice(0, 200);
+  const timeline = buildPDNSTimeline(display);
+
+  const rows = display.map((r, i) => {
+    const tl = timeline ? timeline[i] : null;
+    return `
     <tr>
       <td class="col-pdns-name" style="font-family:var(--mono);font-size:var(--fs-sm)">${esc(r.name)}</td>
       <td class="col-pdns-type"><span class="pdns-type-badge pdns-type-${(r.type||'a').toLowerCase()}">${esc(r.type||'A')}</span></td>
       <td class="col-pdns-value" style="font-family:var(--mono);font-size:var(--fs-sm);color:var(--accent2)">${esc(r.value)}</td>
       <td class="col-pdns-first td-muted">${esc(r.first || r.date || '—')}</td>
       <td class="col-pdns-last td-muted">${esc(r.last || '—')}</td>
+      <td class="col-pdns-tl">${tl
+        ? `<div class="pdns-tl-track"><div class="pdns-tl-bar" style="left:${tl.startPct.toFixed(1)}%;width:${tl.widthPct.toFixed(1)}%;background:${tl.color}"></div></div>`
+        : '<span style="color:var(--border)">—</span>'}</td>
       <td class="col-pdns-src"><span class="src-badge src-${r.source?.toLowerCase().replace('.','')}">${esc(r.source)}</span></td>
       <td style="width:28px"><button class="btn-copy-ioc" onclick="copyToClip(${JSON.stringify(r.value)})" title="Copy IOC">⊕</button></td>
     </tr>
-  `).join('');
+  `}).join('');
 
   autoCollapse('pdns-panel', records.length, 5);
   body.innerHTML = `
@@ -424,6 +525,7 @@ function renderPDNS(state) {
           <th class="col-pdns-value">VALUE</th>
           <th class="col-pdns-first">FIRST SEEN</th>
           <th class="col-pdns-last">LAST SEEN</th>
+          <th class="col-pdns-tl">TIMELINE</th>
           <th class="col-pdns-src">SOURCE</th>
           <th></th>
         </tr></thead>

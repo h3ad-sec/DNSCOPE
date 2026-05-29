@@ -6,6 +6,102 @@ const ALL_PANELS = [
   'ports-panel','fp-panel','cloud-panel','cdnwaf-panel','urlscan-panel',
 ];
 
+/* ── Result cache (1h TTL) ───────────────────────────────────────────────── */
+const CACHE_TTL = 3600 * 1000;
+let _skipCache = false;
+
+function saveCache(state) {
+  try {
+    const payload = {
+      ts: Date.now(),
+      target: state.target, targetType: state.targetType, scannedAt: state.scannedAt,
+      ips: state.ips, asn: state.asn, ipInfo: state.ipInfo,
+      cloud: state.cloud, cdnwaf: state.cdnwaf, whois: state.whois,
+      ti: state.ti, liveDNS: state.liveDNS,
+      pdns: state.pdns.slice(0, 200),
+      certs: state.certs.slice(0, 80),
+      subdomains: Object.fromEntries(Object.entries(state.subdomains).map(([k, v]) => [k, [...v]])),
+      cohosted: state.cohosted,
+      ports: state.ports, fingerprints: state.fingerprints,
+      urlscan: state.urlscan, shodanData: state.shodanData,
+      headers: state.headers, cnames: state.cnames,
+    };
+    localStorage.setItem('dnscope_cache_' + state.target, JSON.stringify(payload));
+  } catch (_) {}
+}
+
+function loadCache(target) {
+  try {
+    const raw = localStorage.getItem('dnscope_cache_' + target);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    if (!data?.ts || Date.now() - data.ts > CACHE_TTL) {
+      localStorage.removeItem('dnscope_cache_' + target);
+      return null;
+    }
+    return data;
+  } catch (_) { return null; }
+}
+
+function restoreFromCache(cached) {
+  _scanState = {
+    target: cached.target, targetType: cached.targetType, scannedAt: cached.scannedAt,
+    ips: cached.ips || [], asn: cached.asn, ipInfo: cached.ipInfo,
+    cloud: cached.cloud, cdnwaf: cached.cdnwaf || [], whois: cached.whois,
+    ti: cached.ti || {}, liveDNS: cached.liveDNS,
+    pdns: cached.pdns || [],
+    certs: cached.certs || [],
+    subdomains: Object.fromEntries(Object.entries(cached.subdomains || {}).map(([k, v]) => [k, new Set(v)])),
+    cohosted: cached.cohosted || [],
+    ports: cached.ports, fingerprints: cached.fingerprints,
+    urlscan: cached.urlscan, shodanData: cached.shodanData,
+    headers: cached.headers || {}, cnames: cached.cnames || [],
+    _autoCollapsed: new Set(),
+  };
+  const isDomain = _scanState.targetType === 'domain';
+  showAllSections(isDomain);
+  renderASN(_scanState); renderPDNS(_scanState); renderCerts(_scanState);
+  renderSubdomains(_scanState); renderCohosted(_scanState); renderCloud(_scanState);
+  renderCDNWAF(_scanState); renderTI(_scanState); renderWHOIS(_scanState);
+  renderLiveDNS(_scanState); renderEmailInfra(_scanState); renderPorts(_scanState);
+  renderFingerprints(_scanState); renderURLScan(_scanState); renderOverview(_scanState);
+  document.getElementById('exportBtn').style.display = '';
+  document.getElementById('copyIOCsBtn').style.display = '';
+  document.getElementById('scanBtn').disabled = false;
+  document.getElementById('scanBtn').textContent = 'RESCAN';
+}
+
+/* ── IOC bulk copy ───────────────────────────────────────────────────────── */
+function copyAllIOCs() {
+  const state = getScanState();
+  if (!state) { showToast('No scan data', 'error'); return; }
+  const iocs = new Set();
+  iocs.add(state.target);
+  (state.ips || []).filter(isIP).forEach(ip => iocs.add(ip));
+  (state.pdns || []).filter(r => isIP(r.value)).forEach(r => iocs.add(r.value));
+  Object.keys(state.subdomains || {}).forEach(sub => iocs.add(sub));
+  (state.whois?.nameservers || []).forEach(ns => iocs.add(ns));
+  const text = [...iocs].sort().join('\n');
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text)
+      .then(() => showToast(`${iocs.size} IOCs copied`, 'success'))
+      .catch(() => { _fallbackCopy(text); showToast(`${iocs.size} IOCs copied`, 'success'); });
+  } else {
+    _fallbackCopy(text);
+    showToast(`${iocs.size} IOCs copied`, 'success');
+  }
+}
+
+function forceRescan() {
+  const raw = document.getElementById('targetInput').value.trim();
+  if (!raw) return;
+  const target = raw.replace(/^https?:\/\//i, '').replace(/\/.*/, '').toLowerCase();
+  localStorage.removeItem('dnscope_cache_' + target);
+  document.getElementById('cacheBanner').style.display = 'none';
+  _skipCache = true;
+  startScan();
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape')
@@ -63,10 +159,27 @@ async function startScan() {
   const target = raw.replace(/^https?:\/\//i, '').replace(/\/.*/, '').toLowerCase();
   const targetType = isIP(target) ? 'ip' : 'domain';
 
+  const useCache = !_skipCache;
+  _skipCache = false;
+
+  if (useCache) {
+    const cached = loadCache(target);
+    if (cached) {
+      const ageMin = Math.round((Date.now() - cached.ts) / 60000);
+      document.getElementById('cacheBanner').style.display = '';
+      document.getElementById('cacheBannerText').textContent =
+        `Cached result · ${ageMin} min ago · target: ${target}`;
+      restoreFromCache(cached);
+      return;
+    }
+  }
+
+  document.getElementById('cacheBanner').style.display = 'none';
   document.getElementById('scanBtn').disabled = true;
   document.getElementById('scanBtn').textContent = 'SCANNING…';
   document.getElementById('stopBtn').style.display = '';
   document.getElementById('exportBtn').style.display = 'none';
+  document.getElementById('copyIOCsBtn').style.display = 'none';
 
   ALL_PANELS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
   resetSections();
@@ -99,6 +212,8 @@ function clearAll() {
   document.getElementById('scanBtn').textContent = 'SCAN';
   document.getElementById('stopBtn').style.display = 'none';
   document.getElementById('exportBtn').style.display = 'none';
+  document.getElementById('copyIOCsBtn').style.display = 'none';
+  document.getElementById('cacheBanner').style.display = 'none';
   document.getElementById('progressPanel').style.display = 'none';
   ALL_PANELS.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
 }

@@ -218,7 +218,10 @@ async function runScan(target, targetType) {
     `${_scanState.pdns.length} passive DNS · ${subCount} subdomains · ${_scanState.certs.length} certs`);
   setTimeout(() => { document.getElementById('progressPanel').style.display = 'none'; }, 2000);
 
+  if (typeof saveCache === 'function') saveCache(_scanState);
+
   document.getElementById('exportBtn').style.display = '';
+  document.getElementById('copyIOCsBtn').style.display = '';
   document.getElementById('scanBtn').disabled = false;
   document.getElementById('scanBtn').textContent = 'RESCAN';
   document.getElementById('stopBtn').style.display = 'none';

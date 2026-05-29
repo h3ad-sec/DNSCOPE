@@ -7,7 +7,7 @@
   <meta name="description" content="DNSCOPE by H3AD-SEC — Domain infrastructure mapper. ASN · Passive DNS · Certificates · Subdomains · Co-hosted · Cloud/CDN/WAF detection. Map the Infrastructure.">
   <link rel="icon" href="https://h3ad-sec.github.io/fevicon.png?v=2026" type="image/png">
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20260516a">
+  <link rel="stylesheet" href="css/style.css?v=20260529a">
 </head>
 <body class="dark">
   <div id="scroll-sentinel" aria-hidden="true"></div>
@@ -172,6 +172,7 @@
             <button class="btn btn-stop" id="stopBtn" onclick="stopScan()" style="display:none">■ STOP</button>
             <button class="btn btn-secondary" onclick="clearAll()">CLEAR</button>
             <div class="rate-note">12 sources · Parallel · Managed</div>
+            <button class="btn btn-export" id="copyIOCsBtn" onclick="copyAllIOCs()" style="display:none" title="Copy all IOCs to clipboard">⊕ IOCs</button>
             <button class="btn btn-export" id="exportBtn" onclick="openExportModal()" style="display:none">
               <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
                 <path d="M6 1v7M3 5l3 3 3-3M1 9v2h10V9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
@@ -180,6 +181,12 @@
             </button>
           </div>
         </div>
+      </div>
+
+      <!-- Cache Banner -->
+      <div class="cache-banner" id="cacheBanner" style="display:none">
+        <span id="cacheBannerText">Cached result</span>
+        <button class="cache-rescan-btn" onclick="forceRescan()">↺ RESCAN FRESH</button>
       </div>
 
       <!-- Progress -->
@@ -425,11 +432,11 @@
   <!-- Toast container -->
   <div class="toast-wrap" id="toastWrap"></div>
 
-  <script src="js/api.js?v=20260516a"></script>
-  <script src="js/scanner.js?v=20260516a"></script>
-  <script src="js/ui.js?v=20260516a"></script>
-  <script src="js/export.js?v=20260516a"></script>
-  <script src="js/app.js?v=20260516a"></script>
+  <script src="js/api.js?v=20260529a"></script>
+  <script src="js/scanner.js?v=20260529a"></script>
+  <script src="js/ui.js?v=20260529a"></script>
+  <script src="js/export.js?v=20260529a"></script>
+  <script src="js/app.js?v=20260529a"></script>
 
   <script>
     /* ── NAV ─────────────────────────────────────────────────────────────── */
