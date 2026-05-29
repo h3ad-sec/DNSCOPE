@@ -196,6 +196,11 @@ async function runScan(target, targetType) {
 
   await Promise.allSettled(tasks);
 
+  // WAF origin bypass (domain only, when CDN/WAF detected)
+  if (isDomain && _scanState.cdnwaf.length > 0) {
+    await detectWAFBypass(_scanState, sig);
+  }
+
   // Final renders
   renderASN(_scanState);
   renderPDNS(_scanState);
@@ -219,6 +224,20 @@ async function runScan(target, targetType) {
   setTimeout(() => { document.getElementById('progressPanel').style.display = 'none'; }, 2000);
 
   if (typeof saveCache === 'function') saveCache(_scanState);
+
+  // Lookalike scan (domain only, async — renders when done)
+  if (isDomain && typeof runLookalikeScan === 'function') {
+    const permCount = generatePermutations(_scanState.target).length;
+    const llPanel = document.getElementById('lookalike-panel');
+    if (llPanel) {
+      llPanel.style.display = '';
+      const llBody = document.getElementById('lookalike-body');
+      if (llBody) llBody.innerHTML = `<div class="loading-row"><div class="spinner"></div>Checking ${permCount} permutations…</div>`;
+    }
+    runLookalikeScan(_scanState.target, sig)
+      .then(results => { _scanState.lookalikes = results; renderLookalikes(_scanState); })
+      .catch(() => { const b = document.getElementById('lookalike-body'); if (b) b.innerHTML = `<div class="ds-empty">Lookalike scan unavailable.</div>`; });
+  }
 
   document.getElementById('exportBtn').style.display = '';
   document.getElementById('copyIOCsBtn').style.display = '';
@@ -281,6 +300,50 @@ function showAllSections(isDomain) {
   if (isDomain) ids.push('certs-panel', 'subdomains-panel',
     'whois-panel', 'livedns-panel', 'email-panel', 'urlscan-panel');
   ids.forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ''; });
+}
+
+/* ── WAF Origin Bypass Detection ─────────────────────────────────────────── */
+async function detectWAFBypass(state, signal) {
+  const currentIPs = new Set(state.ips.filter(isIP));
+  const candidates = [];
+  const seenIPs = new Set();
+
+  // 1. Historical PDNS IPs not in current resolution
+  const historicalIPs = state.pdns
+    .filter(r => isIP(r.value) && !currentIPs.has(r.value))
+    .sort((a, b) => (a.first || '').localeCompare(b.first || ''));
+
+  for (const r of historicalIPs.slice(0, 6)) {
+    if (!seenIPs.has(r.value)) {
+      seenIPs.add(r.value);
+      candidates.push({
+        ip: r.value,
+        source: `Historical PDNS · ${r.source}${r.first ? ' · ' + r.first : ''}`,
+        confidence: 'MEDIUM',
+      });
+    }
+  }
+
+  // 2. Probe common direct-access subdomains
+  if (state.targetType === 'domain') {
+    const BYPASS_SUBS = ['origin', 'direct', 'mail', 'smtp', 'ftp', 'cpanel', 'webmail', 'ns1', 'server', 'direct-connect'];
+    const probes = BYPASS_SUBS.map(async sub => {
+      const probe = `${sub}.${state.target}`;
+      try {
+        const d = await dsFetch(`/api/dns?domain=${encodeURIComponent(probe)}`, signal);
+        const ips = d?.records?.A || [];
+        ips.filter(ip => !currentIPs.has(ip)).forEach(ip => {
+          if (!seenIPs.has(ip)) {
+            seenIPs.add(ip);
+            candidates.push({ ip, source: `Subdomain probe: ${probe}`, confidence: 'HIGH' });
+          }
+        });
+      } catch (_) {}
+    });
+    await Promise.allSettled(probes);
+  }
+
+  state.wafBypass = candidates;
 }
 
 function abortScan() { _scanController?.abort(); }

@@ -9,6 +9,7 @@ function doExport() {
   if (fmt === 'md') exportMarkdown(state);
   if (fmt === 'stix') exportSTIX(state);
   if (fmt === 'misp') exportMISP(state);
+  if (fmt === 'print') { document.getElementById('export-modal').classList.remove('open'); setTimeout(() => window.print(), 200); return; }
 
   document.getElementById('export-modal').classList.remove('open');
 }

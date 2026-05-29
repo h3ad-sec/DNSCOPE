@@ -3,7 +3,7 @@
 const ALL_PANELS = [
   'overview-panel','ti-panel','whois-panel','livedns-panel','email-panel',
   'asn-panel','pdns-panel','certs-panel','subdomains-panel','cohosted-panel',
-  'ports-panel','fp-panel','cloud-panel','cdnwaf-panel','urlscan-panel',
+  'lookalike-panel','ports-panel','fp-panel','cloud-panel','cdnwaf-panel','urlscan-panel',
 ];
 
 /* ── Result cache (1h TTL) ───────────────────────────────────────────────── */
@@ -205,7 +205,25 @@ function stopScan() {
   showToast('Scan stopped', 'warning');
 }
 
+/* ── Quick pivot scan ────────────────────────────────────────────────────── */
+function quickScan(target) {
+  if (typeof _bulkMode !== 'undefined' && _bulkMode) setMode('single');
+  document.getElementById('targetInput').value = target;
+  onTargetInput();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  setTimeout(() => startScan(), 80);
+}
+
 function clearAll() {
+  if (typeof _bulkMode !== 'undefined' && _bulkMode) {
+    const bi = document.getElementById('bulkInput');
+    if (bi) bi.value = '';
+    const cl = document.getElementById('bulkCountLabel');
+    if (cl) cl.textContent = '0 targets';
+    const rp = document.getElementById('bulk-results-panel');
+    if (rp) rp.style.display = 'none';
+    return;
+  }
   document.getElementById('targetInput').value = '';
   document.getElementById('inputTypeBadge').textContent = '';
   document.getElementById('scanBtn').disabled = true;

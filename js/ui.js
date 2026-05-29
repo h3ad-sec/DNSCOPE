@@ -134,9 +134,11 @@ function renderASN(state) {
       ${ip?.city ? `<div class="asn-block"><div class="asn-key">LOCATION</div><div class="asn-val">${esc(ip.city)}${ip.region ? ', ' + esc(ip.region) : ''}</div></div>` : ''}
       ${ip?.hostname ? `<div class="asn-block"><div class="asn-key">RDNS HOSTNAME</div><div class="asn-val">${esc(ip.hostname)}</div></div>` : ''}
     </div>
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
       <span class="src-badge src-bgpview">BGPVIEW</span>
       <span class="src-badge src-ipinfo">IPINFO</span>
+      ${asn ? `<a class="pivot-link" href="https://www.shodan.io/search?query=asn%3AAS${esc(String(asn))}" target="_blank" rel="noopener">Shodan ASN ↗</a>` : ''}
+      ${asn ? `<a class="pivot-link" href="https://bgp.he.net/AS${esc(String(asn))}" target="_blank" rel="noopener">BGP.HE ↗</a>` : ''}
     </div>
   `;
 }
@@ -511,7 +513,10 @@ function renderPDNS(state) {
         ? `<div class="pdns-tl-track"><div class="pdns-tl-bar" style="left:${tl.startPct.toFixed(1)}%;width:${tl.widthPct.toFixed(1)}%;background:${tl.color}"></div></div>`
         : '<span style="color:var(--border)">—</span>'}</td>
       <td class="col-pdns-src"><span class="src-badge src-${r.source?.toLowerCase().replace('.','')}">${esc(r.source)}</span></td>
-      <td style="width:28px"><button class="btn-copy-ioc" onclick="copyToClip(${JSON.stringify(r.value)})" title="Copy IOC">⊕</button></td>
+      <td style="width:56px;display:flex;gap:3px;align-items:center">
+        <button class="btn-copy-ioc" onclick="copyToClip(${JSON.stringify(r.value)})" title="Copy IOC">⊕</button>
+        ${isIP(r.value) ? `<button class="btn-copy-ioc" style="font-size:10px" onclick="quickScan(${JSON.stringify(r.value)})" title="Scan this IP">→</button>` : ''}
+      </td>
     </tr>
   `}).join('');
 
@@ -624,6 +629,7 @@ function renderSubdomains(state) {
         <div class="subdomain-item" data-sub="${esc(sub)}">
           <span class="subdomain-name">${esc(sub)}</span>
           <div class="src-tags">${[...sources].map(s => `<span class="src-badge src-${srcClass(s)}">${esc(s)}</span>`).join('')}</div>
+          <button class="pivot-btn" onclick="quickScan(${JSON.stringify(sub)})" title="Scan subdomain">→ Scan</button>
           <button class="btn-copy-ioc" onclick="copyToClip(${JSON.stringify(sub)})" title="Copy">⊕</button>
         </div>
       `).join('')}
@@ -671,6 +677,7 @@ function renderCohosted(state) {
             <span class="cohosted-domain">${esc(item.domain)}</span>
             ${item.ip && isIP(item.ip) ? `<span class="cohosted-ip">${esc(item.ip)}</span>` : ''}
             <span class="src-badge src-${srcClass(item.source)}">${esc(item.source)}</span>
+            <button class="pivot-btn" onclick="quickScan(${JSON.stringify(item.domain)})" title="Scan domain">→ Scan</button>
             <button class="btn-copy-ioc" onclick="copyToClip(${JSON.stringify(item.domain)})" title="Copy">⊕</button>
           </div>
         `).join('')}
@@ -767,14 +774,20 @@ function renderFingerprints(state) {
         <div class="fp-key">JARM FINGERPRINT</div>
         ${hasJarm ? `
           <div class="fp-val fp-hash">${esc(fp.jarm)}</div>
-          <button class="btn-copy-ioc" style="opacity:1;margin-top:6px" onclick="copyToClip(${JSON.stringify(fp.jarm)})">⊕ COPY</button>
+          <div class="pivot-row">
+            <button class="btn-copy-ioc" style="opacity:1" onclick="copyToClip(${JSON.stringify(fp.jarm)})">⊕ COPY</button>
+            <a class="pivot-link" href="https://www.shodan.io/search?query=ssl.jarm%3A${esc(fp.jarm)}" target="_blank" rel="noopener">Shodan JARM ↗</a>
+          </div>
         ` : `<div class="fp-val" style="color:var(--muted);font-style:italic">Not available</div>`}
       </div>
       <div class="fp-block">
         <div class="fp-key">FAVICON HASH (Shodan)</div>
         ${hasFavicon ? `
           <div class="fp-val fp-hash">${esc(String(fp.faviconHash))}</div>
-          <button class="btn-copy-ioc" style="opacity:1;margin-top:6px" onclick="copyToClip(${JSON.stringify(String(fp.faviconHash))})">⊕ COPY</button>
+          <div class="pivot-row">
+            <button class="btn-copy-ioc" style="opacity:1" onclick="copyToClip(${JSON.stringify(String(fp.faviconHash))})">⊕ COPY</button>
+            <a class="pivot-link" href="https://www.shodan.io/search?query=http.favicon.hash%3A${esc(String(fp.faviconHash))}" target="_blank" rel="noopener">Shodan Favicon ↗</a>
+          </div>
         ` : `<div class="fp-val" style="color:var(--muted);font-style:italic">Not available</div>`}
       </div>
     </div>
@@ -900,6 +913,7 @@ function renderCDNWAF(state) {
     return;
   }
 
+  const bypass = state.wafBypass || [];
   body.innerHTML = `
     <div class="cdnwaf-list">${list.map(item => `
       <div class="cdnwaf-item">
@@ -910,9 +924,26 @@ function renderCDNWAF(state) {
         ${item.evidence?.length ? `<div class="cdnwaf-evidence">${item.evidence.map(e => `<span class="cdnwaf-ev-chip">${esc(e)}</span>`).join('')}</div>` : ''}
       </div>
     `).join('')}</div>
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">
+    ${bypass.length ? `
+      <div class="bypass-section">
+        <div class="bypass-header">⚠ ORIGIN BYPASS CANDIDATES <span style="font-size:9px;color:var(--muted);font-weight:400;letter-spacing:0">(${bypass.length} found)</span></div>
+        <div class="bypass-list">
+          ${bypass.map(b => `
+            <div class="bypass-item">
+              <span class="bypass-ip">${esc(b.ip)}</span>
+              <span class="bypass-source">${esc(b.source)}</span>
+              <span class="bypass-conf bypass-${b.confidence.toLowerCase()}">${esc(b.confidence)}</span>
+              <button class="pivot-btn" onclick="quickScan(${JSON.stringify(b.ip)})" title="Scan origin IP">→ Scan</button>
+              <button class="btn-copy-ioc" style="opacity:1" onclick="copyToClip(${JSON.stringify(b.ip)})" title="Copy IP">⊕</button>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    ` : ''}
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
       <span class="src-badge src-shodan">SHODAN</span>
       <span class="src-badge src-ipinfo">HEADERS</span>
+      ${!bypass.length && list.length ? `<span style="font-family:var(--mono);font-size:var(--fs-xs);color:var(--muted)">Origin bypass check running…</span>` : ''}
     </div>
   `;
 }

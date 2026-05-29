@@ -7,7 +7,7 @@
   <meta name="description" content="DNSCOPE by H3AD-SEC — Domain infrastructure mapper. ASN · Passive DNS · Certificates · Subdomains · Co-hosted · Cloud/CDN/WAF detection. Map the Infrastructure.">
   <link rel="icon" href="https://h3ad-sec.github.io/fevicon.png?v=2026" type="image/png">
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Exo+2:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="css/style.css?v=20260529a">
+  <link rel="stylesheet" href="css/style.css?v=20260529b">
 </head>
 <body class="dark">
   <div id="scroll-sentinel" aria-hidden="true"></div>
@@ -156,29 +156,48 @@
       <div class="panel" id="input-panel">
         <div class="panel-header-static">
           <div class="panel-title">TARGET</div>
+          <div class="mode-toggle">
+            <button class="mode-btn mode-active" id="modeSingle" onclick="setMode('single')">SINGLE</button>
+            <button class="mode-btn" id="modeBulk" onclick="setMode('bulk')">BULK</button>
+          </div>
           <div class="panel-meta" id="input-meta"></div>
         </div>
         <div class="panel-body">
-          <div class="target-bar">
-            <div class="target-label">⟩_</div>
-            <input type="text" id="targetInput" class="target-input"
-              placeholder="github.com  or  140.82.121.4"
-              autocomplete="off" spellcheck="false"
-              oninput="onTargetInput()" onkeydown="if(event.key==='Enter')startScan()">
-            <div class="input-type-badge" id="inputTypeBadge"></div>
+          <!-- Single mode -->
+          <div id="singleInputArea">
+            <div class="target-bar">
+              <div class="target-label">⟩_</div>
+              <input type="text" id="targetInput" class="target-input"
+                placeholder="github.com  or  140.82.121.4"
+                autocomplete="off" spellcheck="false"
+                oninput="onTargetInput()" onkeydown="if(event.key==='Enter')startScan()">
+              <div class="input-type-badge" id="inputTypeBadge"></div>
+            </div>
+            <div class="action-row">
+              <button class="btn btn-primary" id="scanBtn" onclick="startScan()" disabled>SCAN</button>
+              <button class="btn btn-stop" id="stopBtn" onclick="stopScan()" style="display:none">■ STOP</button>
+              <button class="btn btn-secondary" onclick="clearAll()">CLEAR</button>
+              <div class="rate-note">12 sources · Parallel · Managed</div>
+              <button class="btn btn-export" id="copyIOCsBtn" onclick="copyAllIOCs()" style="display:none" title="Copy all IOCs to clipboard">⊕ IOCs</button>
+              <button class="btn btn-export" id="exportBtn" onclick="openExportModal()" style="display:none">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M6 1v7M3 5l3 3 3-3M1 9v2h10V9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                EXPORT
+              </button>
+            </div>
           </div>
-          <div class="action-row">
-            <button class="btn btn-primary" id="scanBtn" onclick="startScan()" disabled>SCAN</button>
-            <button class="btn btn-stop" id="stopBtn" onclick="stopScan()" style="display:none">■ STOP</button>
-            <button class="btn btn-secondary" onclick="clearAll()">CLEAR</button>
-            <div class="rate-note">12 sources · Parallel · Managed</div>
-            <button class="btn btn-export" id="copyIOCsBtn" onclick="copyAllIOCs()" style="display:none" title="Copy all IOCs to clipboard">⊕ IOCs</button>
-            <button class="btn btn-export" id="exportBtn" onclick="openExportModal()" style="display:none">
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M6 1v7M3 5l3 3 3-3M1 9v2h10V9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
-              </svg>
-              EXPORT
-            </button>
+          <!-- Bulk mode -->
+          <div id="bulkInputArea" style="display:none">
+            <textarea id="bulkInput" class="bulk-textarea"
+              placeholder="One domain or IP per line&#10;github.com&#10;140.82.121.4&#10;# lines starting with # are ignored"
+              oninput="onBulkInput()"></textarea>
+            <div class="action-row" style="margin-top:12px">
+              <span class="bulk-count-label" id="bulkCountLabel">0 targets</span>
+              <button class="btn btn-stop" id="bulkStopBtn" onclick="stopBulkScan()" style="display:none">■ STOP</button>
+              <button class="btn btn-primary" id="bulkScanBtn" onclick="startBulkScan()">QUEUE SCAN</button>
+              <button class="btn btn-secondary" onclick="clearAll()">CLEAR</button>
+            </div>
           </div>
         </div>
       </div>
@@ -187,6 +206,38 @@
       <div class="cache-banner" id="cacheBanner" style="display:none">
         <span id="cacheBannerText">Cached result</span>
         <button class="cache-rescan-btn" onclick="forceRescan()">↺ RESCAN FRESH</button>
+      </div>
+
+      <!-- Bulk Results -->
+      <div class="panel" id="bulk-results-panel" style="display:none">
+        <div class="panel-header-static">
+          <div class="panel-title">BULK SCAN RESULTS</div>
+          <div class="panel-meta" id="bulkResultsMeta"></div>
+          <button class="btn btn-export" id="bulkExportBtn" onclick="exportBulkCSV()" style="display:none;margin-left:auto">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M6 1v7M3 5l3 3 3-3M1 9v2h10V9" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+            CSV
+          </button>
+        </div>
+        <div class="panel-body">
+          <div class="table-wrap">
+            <table class="ds-table" id="bulkTable">
+              <thead><tr>
+                <th class="col-bulk-target">TARGET</th>
+                <th class="col-bulk-risk">RISK</th>
+                <th class="col-bulk-vt">VT</th>
+                <th class="col-bulk-tf">THREATFOX</th>
+                <th class="col-bulk-nrd">NRD</th>
+                <th class="col-bulk-cloud">CLOUD</th>
+                <th class="col-bulk-ips">IPs</th>
+                <th class="col-bulk-subs">SUBS</th>
+                <th class="col-bulk-act">ACTIONS</th>
+              </tr></thead>
+              <tbody id="bulkTableBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
 
       <!-- Progress -->
@@ -306,6 +357,18 @@
         </div>
       </div>
 
+      <!-- Lookalike Detection -->
+      <div class="panel" id="lookalike-panel" style="display:none">
+        <div class="panel-header" onclick="togglePanel('lookalike-panel')">
+          <div class="panel-title">LOOKALIKE · PERMUTATIONS</div>
+          <div class="panel-meta" id="lookalike-meta"></div>
+          <div class="panel-chevron" id="lookalike-chevron">▲</div>
+        </div>
+        <div class="panel-body" id="lookalike-body">
+          <div class="loading-row"><div class="spinner"></div>Checking permutations…</div>
+        </div>
+      </div>
+
       <!-- Co-hosted -->
       <div class="panel" id="cohosted-panel" style="display:none">
         <div class="panel-header" onclick="togglePanel('cohosted-panel')">
@@ -419,6 +482,7 @@
             <label class="exp-radio"><input type="radio" name="exp-fmt" value="md"> Markdown</label>
             <label class="exp-radio"><input type="radio" name="exp-fmt" value="stix"> STIX 2.1</label>
             <label class="exp-radio"><input type="radio" name="exp-fmt" value="misp"> MISP</label>
+            <label class="exp-radio"><input type="radio" name="exp-fmt" value="print"> Print / PDF</label>
           </div>
         </div>
         <div style="display:flex;gap:10px;justify-content:flex-end">
@@ -432,11 +496,13 @@
   <!-- Toast container -->
   <div class="toast-wrap" id="toastWrap"></div>
 
-  <script src="js/api.js?v=20260529a"></script>
-  <script src="js/scanner.js?v=20260529a"></script>
-  <script src="js/ui.js?v=20260529a"></script>
-  <script src="js/export.js?v=20260529a"></script>
-  <script src="js/app.js?v=20260529a"></script>
+  <script src="js/api.js?v=20260529b"></script>
+  <script src="js/scanner.js?v=20260529b"></script>
+  <script src="js/ui.js?v=20260529b"></script>
+  <script src="js/bulk.js?v=20260529b"></script>
+  <script src="js/lookalike.js?v=20260529b"></script>
+  <script src="js/export.js?v=20260529b"></script>
+  <script src="js/app.js?v=20260529b"></script>
 
   <script>
     /* ── NAV ─────────────────────────────────────────────────────────────── */
