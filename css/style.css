@@ -344,6 +344,13 @@ body.light .btn-primary{color:#fff;}
 .footer-inner{max-width:1400px;margin:0 auto;display:flex;align-items:center;gap:12px;font-family:var(--mono);font-size:var(--fs-xs);color:var(--muted);flex-wrap:wrap;}
 .footer-brand{color:var(--accent);text-decoration:none;}
 .footer-project{color:var(--accent2);}
+.footer-credit-row{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:16px;flex-wrap:wrap;}
+.footer-credit-pill{display:inline-flex;flex-wrap:nowrap;align-items:center;gap:6px;padding:4px 12px;border:1px solid var(--border);border-radius:999px;text-decoration:none;font-family:'Exo 2',sans-serif;font-weight:500;font-size:var(--fs-xs);white-space:nowrap;transition:border-color .15s;}
+.footer-credit-pill:hover{border-color:var(--accent);}
+.footer-credit-pill .credit-tool{font-weight:700;letter-spacing:2px;}
+.footer-credit-pill .credit-by{color:var(--muted);}
+.footer-credit-pill .credit-name{color:var(--accent);font-weight:700;letter-spacing:.5px;}
+.footer-copyright{color:var(--muted);font-family:'Exo 2',sans-serif;font-size:var(--fs-xs);}
 .footer-sep{color:var(--border);}
 
 /* ── Spinner ─────────────────────────────────────────────────────────────── */
